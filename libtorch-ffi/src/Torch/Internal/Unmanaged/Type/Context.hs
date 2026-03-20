@@ -26,6 +26,7 @@ C.context $ C.cppCtx <> mempty { C.ctxTypesTable = typeTable }
 
 
 C.include "<ATen/Context.h>"
+C.include "<ATen/detail/MPSHooksInterface.h>"
 C.include "<vector>"
 
 
@@ -113,5 +114,14 @@ manual_seed_L
 manual_seed_L _seed =
   [C.throwBlock| void {  (at::manual_seed(
     $(uint64_t _seed)));
+  }|]
+
+mps_empty_cache
+  :: IO (())
+mps_empty_cache =
+  [C.throwBlock| void {
+    if (at::hasMPS()) {
+      at::detail::getMPSHooks().emptyCache();
+    }
   }|]
 

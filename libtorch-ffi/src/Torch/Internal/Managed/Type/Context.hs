@@ -84,3 +84,7 @@ get_manual_seed
 get_manual_seed = do
   g <- Unmanaged.getDefaultCPUGenerator
   Unmanaged.generator_current_seed g
+
+mps_empty_cache
+  :: IO (())
+mps_empty_cache = _cast0 Unmanaged.mps_empty_cache
