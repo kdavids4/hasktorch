@@ -31,6 +31,7 @@ import qualified Data.Text.Encoding.Error as T
 import qualified Data.Text as T
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import qualified Torch.Internal.Unmanaged.Type.Context as Context
 
 
 foreign import ccall unsafe "hasktorch_finalizer.h showWeakPtrList"
@@ -90,6 +91,11 @@ retryWithGC' count func =
             performGC
             mallocTrim 0
             threadDelay 1000 -- We need delta delay(1ms) to wait GC.
+            -- GC only returns dead tensors' buffers to the MPS allocator's
+            -- cache; the allocator's high-watermark check counts driver-level
+            -- allocation including that cache, so a retry that needs a new
+            -- heap can never succeed until the cache is flushed.
+            Context.mps_empty_cache
             retryWithGC' (count -1) func
       else throwIO a
   where
