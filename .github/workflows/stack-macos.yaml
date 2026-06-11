@@ -9,9 +9,9 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: true
-    - uses: haskell-actions/setup@v2.7.1
+    - uses: haskell-actions/setup@v2.7.10
       with:
-        ghc-version: '9.6.5'
+        ghc-version: '9.8.4'
         enable-stack: true
         stack-version: 'latest'
     - name: Setup tool-chains
@@ -24,14 +24,10 @@ jobs:
         #wget -qO- https://get.haskellstack.org/ | sh || true
         clang --version
         stack --version
-        brew tap hasktorch/libtorch-prebuild https://github.com/hasktorch/homebrew-libtorch-prebuild || true
-        brew install libtorch-prebuild@2.3 || true
-        brew tap hasktorch/tokenizers https://github.com/hasktorch/tokenizers || true
-        brew install libtokenizers || true
         echo "DYLD_LIBRARY_PATH=/opt/homebrew/lib:/opt/homebrew/opt/libomp/lib:$DYLD_LIBRARY_PATH" >> "${GITHUB_ENV}"
-        #pushd deps/ ; ./get-deps.sh -a cpu -c ;popd
+        ./setup-cabal.sh
     - name: Cache .stack
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.stack
@@ -45,7 +41,6 @@ jobs:
           ${{ runner.os }}-stack-
     - name: Build
       run: |
-        #. setenv
         stack build --stack-yaml stack-macos.yaml entropy || true
         stack build --stack-yaml stack-macos.yaml \
           libtorch-ffi \
@@ -58,10 +53,9 @@ jobs:
           untyped-nlp
     - name: Test
       run: |
-        #. setenv
         stack test --stack-yaml stack-macos.yaml codegen
         stack test --stack-yaml stack-macos.yaml libtorch-ffi
-        stack test --stack-yaml stack-macos.yaml hasktorch
+        PYTORCH_ENABLE_MPS_FALLBACK=1 stack test --stack-yaml stack-macos.yaml hasktorch
         stack exec --stack-yaml stack-macos.yaml codegen-exe
         stack exec --stack-yaml stack-macos.yaml xor-mlp
         stack exec --stack-yaml stack-macos.yaml regression

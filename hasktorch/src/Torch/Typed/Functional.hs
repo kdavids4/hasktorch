@@ -572,6 +572,23 @@ divScalar ::
   Tensor device dtype shape
 divScalar a input = unsafePerformIO $ ATen.cast2 ATen.Managed.div_ts input a
 
+-- | divScalar'
+-- TODO: what dtypes is this defined for?
+-- TODO: what scalar types is this defined for?
+--
+-- >>> dtype &&& shape $ divScalar 2 (ones :: CPUTensor 'D.Float '[2,2])
+-- (Float,[2,2])
+divScalar' ::
+  forall a shape dtype device.
+  D.Scalar a =>
+  -- | tensor input
+  Tensor device dtype shape ->
+  -- | scalar input
+  a ->
+  -- | output
+  Tensor device dtype shape
+divScalar' input a = a `mulScalar` reciprocal input
+
 -- | powScalar
 -- TODO: probably only defined for floating point tensors, or maybe numeric type is lifted?
 --
@@ -4547,8 +4564,20 @@ squeezeDim ::
   Tensor device dtype shape'
 squeezeDim input = unsafePerformIO $ ATen.cast2 ATen.Managed.squeeze_tl input (natValI @dim)
 
--- where' :: Tensor device dtype shape -> Tensor device dtype shape -> Tensor device dtype shape -> Tensor device dtype shape
--- where' _condition _input _other = unsafePerformIO $ (ATen.cast3 ATen.Managed.where_ttt) _condition _input _other
+-- | return a tensor of elements selected from either input or other, depending on condition.
+where' ::
+  forall shape shape' shape'' shape''' shape'''' dtype device.
+  ( shape'' ~ Broadcast shape shape',
+    shape'''' ~ Broadcast shape''' shape''
+  ) =>
+  -- | condition
+  Tensor device 'D.Bool shape ->
+  -- | input
+  Tensor device dtype shape' ->
+  -- | other
+  Tensor device dtype shape''' ->
+  Tensor device dtype shape''''
+where' _condition _input _other = unsafePerformIO $ (ATen.cast3 ATen.Managed.where_ttt) _condition _input _other
 
 -- where_ :: Tensor device dtype shape -> [Tensor device dtype shape]
 -- where_ _condition = unsafePerformIO $ (ATen.cast1 ATen.Managed.where_t) _condition

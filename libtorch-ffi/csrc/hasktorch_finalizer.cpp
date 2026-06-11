@@ -1,8 +1,12 @@
 #include "hasktorch_profile.h"
-#include "hasktorch_finializer.h"
+#include "hasktorch_finalizer.h"
 #include <map>
 
 void delete_tensor(at::Tensor* tensor){
+  delete tensor;
+}
+
+void delete_optionaltensor(std::optional<at::Tensor>* tensor){
   delete tensor;
 }
 

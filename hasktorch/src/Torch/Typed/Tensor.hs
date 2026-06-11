@@ -93,6 +93,9 @@ instance KnownDType 'D.Int64 where
 instance KnownDType 'D.Half where
   dtypeVal = D.Half
 
+instance KnownDType 'D.BFloat16 where
+  dtypeVal = D.BFloat16
+
 instance KnownDType 'D.Float where
   dtypeVal = D.Float
 
@@ -451,6 +454,38 @@ ne a b = UnsafeMkTensor $ D.ne (toDynamic a) (toDynamic b)
 (==.) = eq
 (/=.) = ne
 
+gtScalar,
+  ltScalar,
+  geScalar,
+  leScalar,
+  eqScalar,
+  neScalar,
+  (.>),
+  (.<),
+  (.>=),
+  (.<=),
+  (.==),
+  (./=) ::
+    forall shape dtype device.
+    ( ComparisonDTypeIsValid device dtype,
+      StandardFloatingPointDTypeValidation device dtype
+    ) =>
+    Tensor device dtype shape ->
+    Float ->
+    Tensor device 'D.Bool shape
+gtScalar a s = UnsafeMkTensor $ D.gtScalar (toDynamic a) s
+ltScalar a s = UnsafeMkTensor $ D.ltScalar (toDynamic a) s
+geScalar a s = UnsafeMkTensor $ D.geScalar (toDynamic a) s
+leScalar a s = UnsafeMkTensor $ D.leScalar (toDynamic a) s
+eqScalar a s = UnsafeMkTensor $ D.eqScalar (toDynamic a) s
+neScalar a s = UnsafeMkTensor $ D.neScalar (toDynamic a) s
+(.>) = gtScalar
+(.<) = ltScalar
+(.>=) = geScalar
+(.<=) = leScalar
+(.==) = eqScalar
+(./=) = neScalar
+
 type family ComputeMatMul (reversedShape :: [Nat]) (reversedShape' :: [Nat]) :: Maybe [Nat] where
   ComputeMatMul (k ': '[]) (k ': '[]) = Just '[]
   ComputeMatMul (k ': '[]) (m ': k ': reversedBroadcastShape') = AppendToMaybe m (ComputeBroadcast '[] reversedBroadcastShape')
@@ -512,6 +547,27 @@ selectIdx ::
   Finite n ->
   Tensor device dtype shape'
 selectIdx t idx = UnsafeMkTensor $ D.select (natValI @dim) (getFiniteI idx) (toDynamic t)
+
+type family CheckIndexSelectDim (dim :: Nat) (shape :: [Nat]) (result :: Maybe [Nat]) :: [Nat] where
+  CheckIndexSelectDim dim shape 'Nothing = TypeError (Text "Dim " :<>: ShowType dim :<>: Text " not found in shape " :<>: ShowType shape)
+  CheckIndexSelectDim dim shape ('Just shape') = shape'
+
+type IndexSelectDim (dim :: Nat) (shape :: [Nat]) (numIndices :: Nat) = CheckIndexSelectDim dim shape (ReplaceDim dim shape numIndices)
+
+-- | Returns a new tensor which indexes the input tensor along dimension dim using the entries in index which is a tensor of datatype Int64.
+-- The returned tensor has the same number of dimensions as the original tensor (input).
+-- The dimth dimension has the same size as the length of index; other dimensions have the same size as in the original tensor.
+-- 
+-- See https://pytorch.org/docs/stable/generated/torch.index_select.html for more information.
+indexSelectDim ::
+  forall (dim :: Nat) (shape :: [Nat]) (shape' :: [Nat]) (indexLength :: Nat) dtype device.
+  ( KnownNat dim,
+    shape' ~ IndexSelectDim dim shape indexLength
+  ) =>
+  Tensor device D.Int64 '[indexLength]
+  -> Tensor device dtype shape
+  -> Tensor device dtype shape'
+indexSelectDim index inputs = UnsafeMkTensor $ D.indexSelect (natValI @dim) (toDynamic index) (toDynamic inputs)
 
 type family Numel (shape :: [Nat]) :: Nat where
   Numel '[] = 1
