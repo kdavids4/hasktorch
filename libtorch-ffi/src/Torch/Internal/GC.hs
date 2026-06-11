@@ -15,7 +15,7 @@ module Torch.Internal.GC where
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async
-import Control.Exception.Safe (Exception, MonadThrow, Typeable, catch, throwIO, throwM)
+import Control.Exception.Safe (Exception, MonadThrow, Typeable, bracket, catch, throwIO, throwM)
 import Control.Monad (when)
 import Data.List (isPrefixOf)
 import Foreign.C.Types
@@ -36,6 +36,24 @@ import qualified Torch.Internal.Unmanaged.Type.Context as Context
 
 foreign import ccall unsafe "hasktorch_finalizer.h showWeakPtrList"
   c_showWeakPtrList :: CInt -> IO ()
+
+foreign import ccall unsafe "hasktorch_finalizer.h hasktorch_autorelease_pool_push"
+  c_autorelease_pool_push :: IO ()
+
+foreign import ccall unsafe "hasktorch_finalizer.h hasktorch_autorelease_pool_pop"
+  c_autorelease_pool_pop :: IO ()
+
+-- | Run an action with an Objective-C autorelease pool in scope. GHC
+-- threads have no pool, and on macOS the Metal driver autoreleases buffer
+-- wrapper objects while libtorch MPS ops execute; without a pool the objc
+-- runtime leaks them — one Metal buffer per tensor, unbounded. Every
+-- libtorch call dispatched through 'retryWithGC' is bracketed with this.
+-- Pool tokens are tracked per OS thread on the C side, so a green-thread
+-- migration between push and pop is harmless. No-op off macOS.
+withAutoreleasePool :: IO a -> IO a
+withAutoreleasePool func =
+  bracket c_autorelease_pool_push (const c_autorelease_pool_pop) (const func)
+{-# INLINE withAutoreleasePool #-}
 
 -- malloc_trim is a glibc function. It doesn't exist on macos.
 #ifdef ENABLE_DUMMY_MALLOC_TRIM
@@ -107,7 +125,7 @@ retryWithGC' count func =
 {-# INLINE retryWithGC' #-}
 
 retryWithGC :: IO a -> IO a
-retryWithGC func = prettyException $ retryWithGC' 10 func
+retryWithGC func = prettyException $ retryWithGC' 10 (withAutoreleasePool func)
 {-# INLINE retryWithGC #-}
 
 checkOSMemoryWithGC :: IO ()

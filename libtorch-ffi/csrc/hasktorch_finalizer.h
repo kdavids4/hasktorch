@@ -15,6 +15,13 @@
 #include <vector>
 
 extern "C" {
+  // Scoped Objective-C autorelease pool for threads that lack one (every
+  // GHC thread). Tokens live in a thread-local stack on the C side; pop
+  // drains the current OS thread's most recent push. Both are no-ops off
+  // macOS or when libobjc is unavailable.
+  void hasktorch_autorelease_pool_push();
+  void hasktorch_autorelease_pool_pop();
+
   void delete_tensor(at::Tensor* tensor);
 
   void delete_optionaltensor(std::optional<at::Tensor>* tensor);
