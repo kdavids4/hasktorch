@@ -23,12 +23,22 @@ C.include "<torch/types.h>"
 C.include "<torch/csrc/autograd/variable.h>"
 C.include "<torch/csrc/autograd/engine.h>"
 C.include "<ATen/core/functional.h>"
+C.include "<c10/core/AutogradState.h>"
 
 grad :: Ptr Tensor -> Ptr TensorList -> IO (Ptr TensorList)
 grad = gradWithOptions 1 0 0
 
 gradWithOptions :: CBool -> CBool -> CBool -> Ptr Tensor -> Ptr TensorList -> IO (Ptr TensorList)
 gradWithOptions keepGraph createGraph accumulateGrad y inputs = [C.throwBlock| std::vector<at::Tensor>* {
+#ifdef __APPLE__
+    // Run backward single-threaded, on this thread. The autograd engine's
+    // own device worker threads have no Objective-C autorelease pool, so
+    // MPS kernels executed there leak driver objects (MPSGraph result
+    // arrays, Metal buffer wrappers) on every backward pass. This calling
+    // thread is bracketed with a pool by the Haskell side (retryWithGC),
+    // so keeping execution here makes those autoreleases actually drain.
+    c10::AutogradState::get_tls_state().set_multithreading_enabled(false);
+#endif
     torch::autograd::Variable y = *$(at::Tensor* y);
     const auto & inputs = *$(std::vector<at::Tensor>* inputs);
 
