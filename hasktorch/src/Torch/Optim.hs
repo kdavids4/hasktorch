@@ -5,10 +5,8 @@ module Torch.Optim where
 
 import Control.Monad.State
 import Control.Monad (foldM)
-import System.Mem (performGC)
 import Torch.Autograd
 import Torch.Functional
-import Torch.Internal.GC (mallocTrim)
 import Torch.NN
 import Torch.Tensor
 import Torch.TensorFactories
@@ -35,10 +33,15 @@ class Optimizer optimizer where
   runStep paramState optState lossValue = runStep' paramState optState (grad' lossValue $ flattenParameters paramState)
 
   -- | run a single iteration of an optimizer, returning new parameters and updated optimizer state
+  --
+  -- Upstream ran 'performGC' (a full major collection) and 'mallocTrim'
+  -- here on every step as a blunt out-of-memory mitigation; in long
+  -- training runs that single call dominated wall time (one major GC per
+  -- optimizer step). This fork removes it: allocation failures are
+  -- recovered by the GC-and-flush retry in 'Torch.Internal.GC.retryWithGC',
+  -- and callers who want periodic collection can schedule their own.
   runStep' :: (Parameterized model) => model -> optimizer -> Gradients -> LearningRate -> IO (model, optimizer)
   runStep' paramState optState gradients lr = do
-    performGC
-    mallocTrim 0
     let (flatParameters', optState') = step lr gradients depParameters optState
     newFlatParam <- mapM makeIndependent flatParameters'
     pure (replaceParameters paramState newFlatParam, optState')
