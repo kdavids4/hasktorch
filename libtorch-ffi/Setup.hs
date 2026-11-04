@@ -47,7 +47,9 @@ main = defaultMainWithHooks $ simpleUserHooks
           lbi <- confHook simpleUserHooks (gpd, hbi) flags
           -- For macOS, add the -ld_classic flag to the linker
           case buildOS of
-            OSX -> return $ lbi { withPrograms = addLdClassicFlag (withPrograms lbi) }
+            OSX -> do
+              merge <- mergeObjectsWrapper
+              return $ lbi { withPrograms = addMergeObjects merge $ addLdClassicFlag (withPrograms lbi) }
             _ -> return $ lbi
         Just libtorchDir -> do
           libtorchDir <- getLocalUserLibtorchDir
@@ -66,7 +68,9 @@ main = defaultMainWithHooks $ simpleUserHooks
           
           -- Add RPath so the binary finds the libs at runtime
           case buildOS of
-            OSX -> return $ lbi { withPrograms = addRPath libDir $ addLdClassicFlag (withPrograms lbi) }
+            OSX -> do
+              merge <- mergeObjectsWrapper
+              return $ lbi { withPrograms = addMergeObjects merge $ addRPath libDir $ addLdClassicFlag (withPrograms lbi) }
             Linux -> return $ lbi { withPrograms = addRPath libDir (withPrograms lbi) }
             _ -> return $ lbi
   }
@@ -458,6 +462,23 @@ addLdClassicFlag progDb =
   case lookupProgram ghcProgram progDb of
     Just ghc ->
       let ghc' = ghc { programOverrideArgs = ["-optl-ld_classic"] ++ programOverrideArgs ghc }
+      in updateProgram ghc' progDb
+    Nothing -> progDb
+
+-- | The object-merge step GHC runs on every module (it folds each inline-c
+-- block's C++ object into the module's own), replaced on macOS by a wrapper
+-- that makes weak auto-hidden symbols local, as the classic linker's @ld -r@
+-- did. Without it ld-prime -- the only linker from Xcode / Command Line Tools
+-- 27 on, which ignores -ld_classic -- fails the shared-library link on
+-- duplicate libtorch vtables. See tools/merge-objects-localize-weak.sh.
+mergeObjectsWrapper :: IO FilePath
+mergeObjectsWrapper = makeAbsolute ("tools" </> "merge-objects-localize-weak.sh")
+
+addMergeObjects :: FilePath -> ProgramDb -> ProgramDb
+addMergeObjects script progDb =
+  case lookupProgram ghcProgram progDb of
+    Just ghc ->
+      let ghc' = ghc { programOverrideArgs = ["-pgmlm", script] ++ programOverrideArgs ghc }
       in updateProgram ghc' progDb
     Nothing -> progDb
 

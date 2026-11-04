@@ -13,6 +13,7 @@ category:            Codegen
 build-type:          Custom
 extra-source-files:  README.md
                      CHANGELOG.md
+                     tools/merge-objects-localize-weak.sh
 
 custom-setup
   setup-depends:
