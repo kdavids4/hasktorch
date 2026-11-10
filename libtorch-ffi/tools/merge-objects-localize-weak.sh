@@ -15,7 +15,11 @@
 # exported from the image, so localizing it changes nothing a caller can see.
 set -e
 
-/usr/bin/ld "$@"
+# -r is ours to pass. GHC's settings file supplies it as "Merge objects
+# flags", but -pgmlm replaces the program together with those flags, so the
+# arguments that arrive here are only -o and the object list. Without it ld
+# tries to link an executable and fails on _main and every RTS symbol.
+/usr/bin/ld -r "$@"
 
 # Find -o, also inside the response files GHC passes as @file (one argument
 # per line, wrapped in double quotes).
