@@ -54,6 +54,9 @@ nix:
   shell-file: nix/stack-shell.nix
   pure: false
 
+ghc-options:
+  libtorch-ffi: -optl-ld_classic
+
 # ghc-options:
 #   libtorch-ffi: -j +RTS -A128m -n2m -RTS
 #   hasktorch: -j +RTS -A128m -n2m -RTS
